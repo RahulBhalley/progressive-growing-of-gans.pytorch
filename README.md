@@ -1,6 +1,6 @@
 # Progressive-Growing-of-GANs
 
-This repo provides the code for Progressive Growing GANs written in PyTorch. This code is PyTorch implementation from original Theano/Lasagne code. This code only has the inference (generator) network and no training. Please download [100-celeb-hq-1024x1024-ours snapshot](https://drive.google.com/drive/folders/0B4qLcYyJmiz0bWJ5bHdKT0d6UXc) which was originally open sourced by the true authors of Progressive Growing GANs. 
+This is PyTorch implementation of Progressive Growing GANs from original Theano/Lasagne code. This code only has the inference (generator) network and no training. Please download [100-celeb-hq-1024x1024-ours snapshot](https://drive.google.com/drive/folders/0B4qLcYyJmiz0bWJ5bHdKT0d6UXc) which was originally open sourced by the true authors of Progressive Growing GANs. 
 
 To sample an image from learned probability distribution run `python2 generator.py` which samples an image into `generated_samples` folder having 1024x1024 resolution. 
 
@@ -33,3 +33,5 @@ To transfer pretrained weights from Lasagne to PyTorch run `python2 transfer_wei
 # Related Links
 - [Progressive Growing of GANs for Improved Quality, Stability, and Variation](http://research.nvidia.com/sites/default/files/pubs/2017-10_Progressive-Growing-of//karras2017gan-paper.pdf)
 - [Original Implementation in Lasagne/Theano](https://github.com/tkarras/progressive_growing_of_gans)
+
+This code is adopted from [ptrblck](https://github.com/ptrblck)'s implementation. 
