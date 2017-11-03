@@ -2,7 +2,9 @@
 
 This is PyTorch implementation of Progressive Growing GANs from original Theano/Lasagne code. This code only has the inference (generator) network and no training. Please download [100-celeb-hq-1024x1024-ours snapshot](https://drive.google.com/drive/folders/0B4qLcYyJmiz0bWJ5bHdKT0d6UXc) which was originally open sourced by the true authors of Progressive Growing GANs. 
 
-To sample an image from learned probability distribution run `python2 generator.py` which samples an image into `generated_samples` folder having 1024x1024 resolution. 
+##### generate.py
+
+To sample an image from learned probability distribution run `python2 generate.py` which samples an image into `generated_samples` folder having 1024x1024 resolution. 
 
 ### Example generated image
 
@@ -10,9 +12,9 @@ To sample an image from learned probability distribution run `python2 generator.
 
 ##### latent_interpolation.py
 
-Run `python2 latent_interpolation.py` to generate a set of images from latent space generated randomly which can controlled by `--seed` argument in terminal. These images are saved in `interpolation_samples` folder. 
+Run `python2 latent_interpolation.py` to generate a set of images from latent space generated randomly which can be controlled by `--seed` argument in terminal. These images are saved in `interpolation_samples` folder. 
 
-Follwoing flags can be used:
+Following flags can be used:
 
 - --weights - path to pretrained PyTorch state dict
 - --output - Directory for storing interpolated images
