@@ -1,6 +1,8 @@
 # Progressive-Growing-of-GANs
 
-This is PyTorch implementation of Progressive Growing GANs from original Theano/Lasagne code. This code only has the inference (generator) network and no training. Please download [100-celeb-hq-1024x1024-ours snapshot](https://drive.google.com/drive/folders/0B4qLcYyJmiz0bWJ5bHdKT0d6UXc) which was originally open sourced by the true authors of Progressive Growing GANs. 
+This is PyTorch implementation of Progressive Growing GANs from original Theano/Lasagne code. This code only has the inference (generator) network and no training. 
+
+Please download [100-celeb-hq-1024x1024-ours snapshot](https://drive.google.com/drive/folders/0B4qLcYyJmiz0bWJ5bHdKT0d6UXc) which was originally open sourced by the true authors of Progressive Growing GANs. 
 
 ##### generate.py
 
@@ -24,7 +26,7 @@ Following flags can be used:
 - --filter - gaussian filter length for interpolating latent space
 - --seed - random seed for numpy and PyTorch
 
-#### Example interpolation gif
+### Example interpolation GIF
 
 ![alt text](https://raw.githubusercontent.com/rahulbhalley/Progressive-Growing-of-GANs/master/anim.gif)
 
