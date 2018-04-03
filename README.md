@@ -56,7 +56,7 @@ The network training parameters can be configured with following flags.
 
 ### GPU Note
 
-Make sure your machine has CUDA enabled GPU(s). 
+Make sure your machine has CUDA enabled GPU(s) if you want to train on GPUs. Change the `--n_gpu` flag to positive integral value <= available number of GPUs. 
 
 ### Related Links
 
