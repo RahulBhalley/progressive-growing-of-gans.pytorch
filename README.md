@@ -1,41 +1,63 @@
-# Progressive-Growing-of-GANs
+# Progressive Growing of GANs in PyTorch
 
-This is PyTorch implementation of Progressive Growing GANs from original Theano/Lasagne code. This code only has the inference (generator) network and no training. 
+This is PyTorch implementation of Progressive Growing GANs. The network is trainable on custom image dataset. 
 
-Please download [100-celeb-hq-1024x1024-ours snapshot](https://drive.google.com/drive/folders/0B4qLcYyJmiz0bWJ5bHdKT0d6UXc) which was originally open sourced by the true authors of Progressive Growing GANs. 
+Place your dataset folder inside `data` folder. The training stats are added to `repo` folder as the training progresses.
 
-##### generate.py
+## Training Configuration
 
-To sample an image from learned probability distribution run `python2 generate.py` which samples an image into `generated_samples` folder having 1024x1024 resolution. 
+### General settings
 
-### Example generated image
+- `--train_data_root` - set your data sirectory
+- `--random_seed` - random seed to reproduce the experiments
+- `--n_gpu` - multiple GPU training
 
-![alt text](https://raw.githubusercontent.com/rahulbhalley/Progressive-Growing-of-GANs/master/image.png)
+### Training parameters
 
-##### latent_interpolation.py
+- `--lr` - learning rate
+- `--lr_decay` - learning rate decay at every resolution transition
+- `--eps_drift` - coefficient for the drift loss
+- `--smoothing` - smoothing factor for smoothed generator
+- `--nc` - number of input channel
+- `--nz` - input dimension of noise
+- `--ngf` - feature dimension of final layer of generator
+- `--ndf` - feature dimension of first layer of discriminator
+- `--TICK` - 1 tick = 1000 images = (1000/batch_size) iteration
+- `--max_resl` - 10-->1024, 9-->512, 8-->256
+- `--trns_tick` - transition tick
+- `--stab_tick` - stabilization tick
 
-Run `python2 latent_interpolation.py` to generate a set of images from latent space generated randomly which can be controlled by `--seed` argument in terminal. These images are saved in `interpolation_samples` folder. 
+### Network structure
 
-Following flags can be used:
+- `--flag_wn` - use of equalized-learning rate
+- `--flag_bn` - use of batch-normalization (not recommended)
+- `--flag_pixelwise` - use of pixelwise normalization for generator
+- `--flag_gdrop` - use of generalized dropout layer for discriminator
+- `--flag_leaky` - use of leaky relu instead of relu
+- `--flag_tanh` - use of tanh at the end of the generator
+- `--flag_sigmoid` - use of sigmoid at the end of the discriminator
+- `--flag_add_noise` - add noise to the real image(x)
+- `--flag_norm_latent` - pixelwise normalization of latent vector (z)
+- `--flag_add_drift` - add drift loss
 
-- --weights - path to pretrained PyTorch state dict
-- --output - Directory for storing interpolated images
-- --batch_size - batch size for DataLoader
-- --num_workers - number of workers for DataLoader
-- --nb_latents - number of frames to generate
-- --filter - gaussian filter length for interpolating latent space
-- --seed - random seed for numpy and PyTorch
+### Optimizer setting
 
-### Example interpolation GIF
+- `--optimizer` - optimizer type
+- `--beta1` - beta1 for adam
+- `--beta2` - beta2 for adam
 
-![alt text](https://raw.githubusercontent.com/rahulbhalley/Progressive-Growing-of-GANs/master/anim.gif)
+### Display and save setting
 
-##### transfer_weights.py
+- `--use_tb` - enable tensorboard visualization
+- `--save_img_every` - save images every specified iteration
+- `--display_tb_every` - display progress every specified iteration
 
-To transfer pretrained weights from Lasagne to PyTorch run `python2 transfer_weights.py`. 
+## GPU Note
+
+Make sure your machine has CUDA enabled GPU(s). 
 
 # Related Links
-- [Progressive Growing of GANs for Improved Quality, Stability, and Variation](http://research.nvidia.com/sites/default/files/pubs/2017-10_Progressive-Growing-of//karras2017gan-paper.pdf)
-- [Original Implementation in Lasagne/Theano](https://github.com/tkarras/progressive_growing_of_gans)
 
-This code is adopted from [ptrblck](https://github.com/ptrblck)'s implementation. 
+- [Progressive Growing of GANs for Improved Quality, Stability, and Variation](http://research.nvidia.com/sites/default/files/pubs/2017-10_Progressive-Growing-of//karras2017gan-paper.pdf)
+
+- [Original Implementation in Lasagne/Theano](https://github.com/tkarras/progressive_growing_of_gans)
