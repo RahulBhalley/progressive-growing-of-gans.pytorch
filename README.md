@@ -4,15 +4,17 @@ This is PyTorch implementation of Progressive Growing GANs. The network is train
 
 Place your dataset folder inside `data` folder. The training stats are added to `repo` folder as the training progresses.
 
-## Training Configuration
+### Training Configuration
 
-### General settings
+The network training parameters can be configured with following flags.
+
+#### General settings
 
 - `--train_data_root` - set your data sirectory
 - `--random_seed` - random seed to reproduce the experiments
 - `--n_gpu` - multiple GPU training
 
-### Training parameters
+#### Training parameters
 
 - `--lr` - learning rate
 - `--lr_decay` - learning rate decay at every resolution transition
@@ -27,7 +29,7 @@ Place your dataset folder inside `data` folder. The training stats are added to 
 - `--trns_tick` - transition tick
 - `--stab_tick` - stabilization tick
 
-### Network structure
+#### Network structure
 
 - `--flag_wn` - use of equalized-learning rate
 - `--flag_bn` - use of batch-normalization (not recommended)
@@ -40,23 +42,23 @@ Place your dataset folder inside `data` folder. The training stats are added to 
 - `--flag_norm_latent` - pixelwise normalization of latent vector (z)
 - `--flag_add_drift` - add drift loss
 
-### Optimizer setting
+#### Optimizer setting
 
 - `--optimizer` - optimizer type
 - `--beta1` - beta1 for adam
 - `--beta2` - beta2 for adam
 
-### Display and save setting
+#### Display and save setting
 
 - `--use_tb` - enable tensorboard visualization
 - `--save_img_every` - save images every specified iteration
 - `--display_tb_every` - display progress every specified iteration
 
-## GPU Note
+### GPU Note
 
 Make sure your machine has CUDA enabled GPU(s). 
 
-# Related Links
+### Related Links
 
 - [Progressive Growing of GANs for Improved Quality, Stability, and Variation](http://research.nvidia.com/sites/default/files/pubs/2017-10_Progressive-Growing-of//karras2017gan-paper.pdf)
 
