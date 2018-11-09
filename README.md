@@ -64,6 +64,6 @@ Make sure your machine has CUDA enabled GPU(s) if you want to train on GPUs. Cha
 
 ### Related Links
 
-- [Progressive Growing of GANs for Improved Quality, Stability, and Variation](http://research.nvidia.com/sites/default/files/pubs/2017-10_Progressive-Growing-of//karras2017gan-paper.pdf)
+- [Progressive Growing of GANs for Improved Quality, Stability, and Variation](https://arxiv.org/abs/1710.10196)
 
 - [Original Implementation in Lasagne/Theano](https://github.com/tkarras/progressive_growing_of_gans)
