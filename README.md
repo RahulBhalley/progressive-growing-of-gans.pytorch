@@ -1,4 +1,4 @@
-# Progressive Growing of GANs in PyTorch
+# Progressive Growing of Generative Adversarial Network
 
 This is PyTorch implementation of Progressive Growing GANs. The network is trainable on custom image dataset. 
 
