@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from torch.autograd import Variable
 from custom_layers import *
 import copy
 
@@ -28,10 +27,9 @@ def deconv(layers, c_in, c_out, k_size, stride=1, pad=0, leaky=True, wn=False, p
             layers.append(PixelwiseNormLayer())
     return layers
 
-def conv(layers, c_in, c_out, k_size, stride=1, pad=0, leaky=True, wn=False, pixel=False, gdrop=True, only=False):
-    if gdrop:       layers.append(GeneralizedDropout(mode='prop', strength=0.0))
-    if wn:          layers.append(EqualizedConv2d(c_in, c_out, k_size, stride, pad))
-    else:           layers.append(nn.Conv2d(c_in, c_out, k_size, stride, pad))
+def conv(layers, c_in, c_out, k_size, stride=1, pad=0, leaky=True, wn=False, pixel=True, only=False):
+    if wn:    layers.append(EqualizedConv2d(c_in, c_out, k_size, stride, pad))
+    else:     layers.append(nn.Conv2d(c_in, c_out, k_size, stride, pad))
     if not only:
         if leaky:   layers.append(nn.LeakyReLU(0.2))
         else:       layers.append(nn.ReLU())
@@ -63,7 +61,7 @@ def soft_copy_param(target_link, source_link, tau):
 
 def get_module_names(model):
     names = []
-    for key, val in model.state_dict().iteritems():
+    for key, val in model.state_dict().items():
         name = key.split('.')[0]
         if not name in names:
             names.append(name)

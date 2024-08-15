@@ -10,7 +10,6 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from torch.optim import Adam
 import torchvision.transforms as transforms
 
@@ -26,12 +25,19 @@ class PGGAN:
 
     def __init__(self, config):
         self.config = config
+        self.use_cuda = False
+        self.use_mps = False
         
-        if torch.cuda.is_available():
+        if torch.backends.mps.is_available():
+            self.use_mps = True
+            self.device = torch.device("mps")
+            torch.set_default_device(self.device)
+        elif torch.cuda.is_available():
             self.use_cuda = True
+            self.device = torch.device("cuda")
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
         else:
-            self.use_cuda = False
+            self.device = torch.device("cpu")
             torch.set_default_tensor_type('torch.FloatTensor')
 
         self.nz = config.nz
@@ -64,18 +70,19 @@ class PGGAN:
         print('Discriminator architecture:\n{}'.format(self.D.model))
         self.criterion = nn.MSELoss()
 
-        if self.use_cuda:
-            self.criterion = self.criterion.cuda()
-            torch.cuda.manual_seed(config.random_seed)
+        if self.use_cuda or self.use_mps:
+            self.criterion = self.criterion.to(self.device)
+            if self.use_cuda:
+                torch.cuda.manual_seed(config.random_seed)
             if config.n_gpu == 1:
-                self.G = nn.DataParallel(self.G).cuda(device=0)
-                self.D = nn.DataParallel(self.D).cuda(device=0)
+                self.G = nn.DataParallel(self.G).to(self.device)
+                self.D = nn.DataParallel(self.D).to(self.device)
             else:
                 gpus = []
                 for i in range(config.n_gpu):
                     gpus.append(i)
-                self.G = nn.DataParallel(self.G, device_ids=gpus).cuda()
-                self.D = nn.DataParallel(self.D, device_ids=gpus).cuda()
+                self.G = nn.DataParallel(self.G, device_ids=gpus).to(self.device)
+                self.D = nn.DataParallel(self.D, device_ids=gpus).to(self.device)
 
         # Define tensors, ship model to cuda, and get dataloader
         self.renew_everything()
@@ -174,42 +181,36 @@ class PGGAN:
     def renew_everything(self):
         '''Renew the dataloader
         '''
-        self.loader = dl.dataloader(self.config)
+        self.loader = dl.dataloader(self.config, self.device)
         self.loader.renew(min(floor(self.resl), self.max_resl))
 
         # Define tensors
-        self.z = torch.FloatTensor(self.loader.batchsize, self.nz)
-        self.x = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize)
-        self.x_tilde = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize)
-        self.real_label = torch.FloatTensor(self.loader.batchsize).fill_(1)
-        self.fake_label = torch.FloatTensor(self.loader.batchsize).fill_(0)
+        self.z = torch.FloatTensor(self.loader.batchsize, self.nz).to(self.device)
+        self.x = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize).to(self.device)
+        self.x_tilde = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize).to(self.device)
+        self.real_label = torch.FloatTensor(self.loader.batchsize).fill_(1).to(self.device)
+        self.fake_label = torch.FloatTensor(self.loader.batchsize).fill_(0).to(self.device)
 
-        # Enable CUDA
+        # Enable device
         if self.use_cuda:
-            self.z = self.z.cuda()
-            self.x = self.x.cuda()
-            self.x_tilde = self.x_tilde.cuda()
-            self.real_label = self.real_label.cuda()
-            self.fake_label = self.fake_label.cuda()
             torch.cuda.manual_seed(config.random_seed)
 
         # Wrapping `autograd.Variable`
-        self.x = Variable(self.x)
-        self.x_tilde = Variable(self.x_tilde)
-        self.z = Variable(self.z)
-        self.real_label = Variable(self.real_label)
-        self.fake_label = Variable(self.fake_label)
+        self.x = self.x.requires_grad_()
+        self.x_tilde = self.x_tilde.requires_grad_()
+        self.z = self.z.requires_grad_()
+        self.real_label = self.real_label.requires_grad_()
+        self.fake_label = self.fake_label.requires_grad_()
 
-        # Ship new model to CUDA
-        if self.use_cuda:
-            self.G = self.G.cuda()
-            self.D = self.D.cuda()
+        # Ship new model to device
+        self.G = self.G.to(self.device)
+        self.D = self.D.to(self.device)
 
         # Setup the optimizer
         betas = (self.config.beta1, self.config.beta2)
         if self.optimizer == 'adam':
-            self.opt_g = Adam(filter(lambda p: p.requires_grad, self.G.parameters()), lr=self.lr, betas=betas, weight_decay=0.0)
-            self.opt_d = Adam(filter(lambda p: p.requires_grad, self.D.parameters()), lr=self.lr, betas=betas, weight_decay=0.0)
+            self.opt_g = Adam(self.G.parameters(), lr=self.lr, betas=betas, weight_decay=0.0)
+            self.opt_d = Adam(self.D.parameters(), lr=self.lr, betas=betas, weight_decay=0.0)
 
     def feed_interpolated_input(self, x):
         if self.phase == 'gtrns' and floor(self.resl) > 2 and floor(self.resl) <= self.max_resl:
@@ -224,8 +225,8 @@ class PGGAN:
             for i in range(x_low.size(0)):
                 x_low[i] = transform(x_low[i]).mul(2).add(-1)
             x = torch.add(x.mul(alpha), x_low.mul(1 - alpha))   # interpolated_x
-        if self.use_cuda:
-            return x.cuda()
+        if self.use_cuda or self.use_mps:
+            return x.to(self.device)
         else:
             return x
 
@@ -234,21 +235,19 @@ class PGGAN:
             return x
 
         if hasattr(self, '_d_'):
-            self._d_ = self._d_ * 0.9 + torch.mean(self.fx_tilde).data[0] * 0.1
+            self._d_ = self._d_ * 0.9 + torch.mean(self.fx_tilde).item() * 0.1
         else:
             self._d_ = 0.0
         strength = 0.2 * max(0, self._d_ - 0.5) ** 2
         z = np.random.randn(*x.size()).astype(np.float32) * strength
-        z = Variable(torch.from_numpy(z)).cuda() if self.use_cuda else Variable(torch.from_numpy(z))
+        z = torch.from_numpy(z).to(self.device)
         return x + z
 
     def train(self):
         # noise for test
-        self.z_test = torch.FloatTensor(self.loader.batchsize, self.nz)
-        if self.use_cuda:
-            self.z_test = self.z_test.cuda()
-        self.z_test = Variable(self.z_test, volatile=True)
-        self.z_test.data.resize_(self.loader.batchsize, self.nz).normal_(0.0, 1.0)
+        self.z_test = torch.FloatTensor(self.loader.batchsize, self.nz).to(self.device)
+        self.z_test = self.z_test.requires_grad_(False)
+        self.z_test.normal_(0.0, 1.0)
 
         for step in range(0, self.max_resl + 1 + 5):
             for iter in tqdm(range(0, (self.trns_tick * 2 + self.stab_tick * 2) * self.TICK, self.loader.batchsize)):
@@ -290,7 +289,7 @@ class PGGAN:
 
                 # Log information
                 log_msg = ' [E:{0}][T:{1}][{2:6}/{3:6}]  errD: {4:.4f} | errG: {5:.4f} | [lr:{11:.5f}][cur:{6:.3f}][resl:{7:4}][{8}][{9:.1f}%][{10:.1f}%]'.format(
-                    self.epoch, self.global_tick, self.stack, len(self.loader.dataset), loss_d.data[0], loss_g.data[0], self.resl, int(pow(2,floor(self.resl))), self.phase, self.complete['gen'], self.complete['dis'], self.lr)
+                    self.epoch, self.global_tick, self.stack, len(self.loader.dataset), loss_d.item(), loss_g.item(), self.resl, int(pow(2,floor(self.resl))), self.phase, self.complete['gen'], self.complete['dis'], self.lr)
                 tqdm.write(log_msg)
 
                 # Save the model
@@ -307,8 +306,8 @@ class PGGAN:
                 # Tensorboard visualization
                 if self.use_tb:
                     x_test = self.G(self.z_test)
-                    self.tb.add_scalar('data/loss_g', loss_g.data[0], self.global_iter)
-                    self.tb.add_scalar('data/loss_d', loss_d.data[0], self.global_iter)
+                    self.tb.add_scalar('data/loss_g', loss_g.item(), self.global_iter)
+                    self.tb.add_scalar('data/loss_d', loss_d.item(), self.global_iter)
                     self.tb.add_scalar('tick/lr', self.lr, self.global_iter)
                     self.tb.add_scalar('tick/cur_resl', int(pow(2,floor(self.resl))), self.global_iter)
                     self.tb.add_image_grid('grid/x_test', 4, utils.adjust_dyn_range(x_test.data.float(), [-1, 1], [0, 1]), self.global_iter)
