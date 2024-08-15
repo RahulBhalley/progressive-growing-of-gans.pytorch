@@ -40,6 +40,8 @@ class PGGAN:
             self.device = torch.device("cpu")
             torch.set_default_tensor_type('torch.FloatTensor')
 
+        print(f"Training on device: {self.device}")
+
         self.nz = config.nz
         self.optimizer = config.optimizer
         self.resl = 2       # we start with resolution 2^2 = 4
@@ -62,6 +64,8 @@ class PGGAN:
         self.flag_flush_dis = False
         self.flag_add_noise = self.config.flag_add_noise
         self.flag_add_drift = self.config.flag_add_drift
+        self.gan_type = config.gan_type
+        self.gp_lambda = 10  # Gradient penalty lambda for WGAN-GP
 
         # Network settings
         self.G = Generator(config)
@@ -209,8 +213,12 @@ class PGGAN:
         # Setup the optimizer
         betas = (self.config.beta1, self.config.beta2)
         if self.optimizer == 'adam':
-            self.opt_g = Adam(self.G.parameters(), lr=self.lr, betas=betas, weight_decay=0.0)
-            self.opt_d = Adam(self.D.parameters(), lr=self.lr, betas=betas, weight_decay=0.0)
+            if self.gan_type == 'wgan' or self.gan_type == 'wgan-gp':
+                self.opt_g = Adam(self.G.parameters(), lr=self.lr, betas=(0.0, 0.9))
+                self.opt_d = Adam(self.D.parameters(), lr=self.lr, betas=(0.0, 0.9))
+            else:
+                self.opt_g = Adam(self.G.parameters(), lr=self.lr, betas=betas, weight_decay=0.0)
+                self.opt_d = Adam(self.D.parameters(), lr=self.lr, betas=betas, weight_decay=0.0)
 
     def feed_interpolated_input(self, x):
         if self.phase == 'gtrns' and floor(self.resl) > 2 and floor(self.resl) <= self.max_resl:
@@ -273,16 +281,43 @@ class PGGAN:
 
                 self.fx = self.D(self.x)
                 self.fx_tilde = self.D(self.x_tilde.detach())
-                loss_d = self.criterion(self.fx, self.real_label) + self.criterion(self.fx_tilde, self.fake_label)
+
+                if self.gan_type == 'standard':
+                    loss_d = self.criterion(self.fx, self.real_label) + self.criterion(self.fx_tilde, self.fake_label)
+                elif self.gan_type == 'wgan' or self.gan_type == 'wgan-gp':
+                    loss_d = torch.mean(self.fx_tilde) - torch.mean(self.fx)
+
+                    if self.gan_type == 'wgan-gp':
+                        # Compute gradient penalty
+                        alpha = torch.rand(self.x.size(0), 1, 1, 1).to(self.device)
+                        x_hat = (alpha * self.x.data + (1 - alpha) * self.x_tilde.data).requires_grad_(True)
+                        fx_hat = self.D(x_hat)
+                        grad = torch.autograd.grad(
+                            outputs=fx_hat, inputs=x_hat,
+                            grad_outputs=torch.ones(fx_hat.size()).to(self.device),
+                            create_graph=True, retain_graph=True, only_inputs=True
+                        )[0]
+                        grad_penalty = ((grad.norm(2, dim=1) - 1) ** 2).mean() * self.gp_lambda
+                        loss_d += grad_penalty
 
                 # Compute gradients and apply update to parameters
                 loss_d.backward()
                 self.opt_d.step()
 
+                # Clip weights for WGAN
+                if self.gan_type == 'wgan':
+                    for p in self.D.parameters():
+                        p.data.clamp_(-0.01, 0.01)
+
                 # Update generator
+                self.G.zero_grad()
                 fx_tilde = self.D(self.x_tilde)
-                loss_g = self.criterion(fx_tilde, self.real_label.detach())
                 
+                if self.gan_type == 'standard':
+                    loss_g = self.criterion(fx_tilde, self.real_label.detach())
+                elif self.gan_type == 'wgan' or self.gan_type == 'wgan-gp':
+                    loss_g = -torch.mean(fx_tilde)
+
                 # Compute gradients and apply update to parameters
                 loss_g.backward()
                 self.opt_g.step()
