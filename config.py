@@ -38,7 +38,13 @@ parser.add_argument('--flag_sigmoid', type=bool, default=False)     # use of sig
 parser.add_argument('--flag_add_noise', type=bool, default=True)    # add noise to the real image(x)
 parser.add_argument('--flag_norm_latent', type=bool, default=False) # pixelwise normalization of latent vector (z)
 parser.add_argument('--flag_add_drift', type=bool, default=True)    # add drift loss
-parser.add_argument('--gan_type', type=str, default='standard', choices=['standard', 'wgan', 'wgan-gp'], help='GAN training methodology')
+parser.add_argument('--gan_type', type=str, default='standard', choices=['standard', 'wgan', 'wgan-gp', 'lsgan', 'began', 'dragan', 'cgan', 'infogan', 'acgan'], help='GAN training methodology')
+parser.add_argument('--lambda_gp', type=float, default=10.0, help='Gradient penalty lambda for WGAN-GP')
+parser.add_argument('--lambda_drift', type=float, default=0.001, help='Drift loss coefficient for WGAN')
+parser.add_argument('--gamma', type=float, default=0.5, help='Equilibrium constant for BEGAN')
+parser.add_argument('--lambda_k', type=float, default=0.001, help='Learning rate for k in BEGAN')
+parser.add_argument('--lambda_info', type=float, default=1.0, help='Information loss weight for InfoGAN')
+parser.add_argument('--n_classes', type=int, default=10, help='Number of classes for conditional GANs')
 
 ## Optimizer setting
 parser.add_argument('--optimizer', type=str, default='adam')        # optimizer type

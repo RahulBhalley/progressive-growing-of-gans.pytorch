@@ -84,6 +84,10 @@ class Generator(nn.Module):
         self.layer_name = None
         self.module_names = []
         self.model = self.get_init_gen()
+        self.gan_type = config.gan_type
+        if self.gan_type in ['cgan', 'acgan', 'infogan']:
+            self.n_classes = config.n_classes
+            self.embed = nn.Embedding(self.n_classes, self.nz)
 
     def first_block(self):
         layers = []
@@ -188,7 +192,11 @@ class Generator(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = False
 
-    def forward(self, x):
+    def forward(self, x, labels=None):
+        if self.gan_type in ['cgan', 'acgan', 'infogan']:
+            if labels is not None:
+                c = self.embed(labels)
+                x = torch.cat([x, c], 1)
         x = self.model(x.view(x.size(0), -1, 1, 1))
         return x
 
@@ -227,6 +235,12 @@ class Discriminator(nn.Module):
         self.layer_name = None
         self.module_names = []
         self.model = self.get_init_dis()
+        self.gan_type = config.gan_type
+        if self.gan_type in ['cgan', 'acgan']:
+            self.n_classes = config.n_classes
+            self.embed = nn.Embedding(self.n_classes, self.ndf)
+        elif self.gan_type == 'infogan':
+            self.aux_layer = nn.Linear(self.ndf, config.n_classes)
 
     def last_block(self):
         ndim = self.ndf
@@ -327,12 +341,21 @@ class Discriminator(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = False
 
-    def forward(self, x):
-        x = self.model(x)
-        return x
+    def forward(self, x, labels=None):
+        if self.gan_type in ['cgan', 'acgan']:
+            if labels is not None:
+                c = self.embed(labels)
+                c = c.view(c.size(0), c.size(1), 1, 1)
+                x = torch.cat([x, c.expand(-1, -1, x.size(2), x.size(3))], 1)
+        
+        features = self.model(x)
+        validity = features[:, 0].unsqueeze(1)
 
-
-
-
-
-
+        if self.gan_type == 'acgan':
+            aux = self.aux_layer(features[:, 1:])
+            return validity, aux
+        elif self.gan_type == 'infogan':
+            aux = self.aux_layer(features[:, 1:])
+            return validity, aux
+        else:
+            return validity

@@ -251,6 +251,101 @@ class PGGAN:
         z = torch.from_numpy(z).to(self.device)
         return x + z
 
+    def compute_gradient_penalty(self, real_samples, fake_samples):
+        alpha = torch.rand(real_samples.size(0), 1, 1, 1).to(self.device)
+        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+        d_interpolates = self.D(interpolates)
+        fake = torch.ones(d_interpolates.size()).to(self.device)
+        gradients = torch.autograd.grad(
+            outputs=d_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        return gradient_penalty
+
+    def train_step(self):
+        self.G.zero_grad()
+        self.D.zero_grad()
+
+        # Update discriminator
+        self.x.data = self.feed_interpolated_input(self.loader.get_batch())
+        if self.flag_add_noise:
+            self.x = self.add_noise(self.x)
+        self.z.data.resize_(self.loader.batchsize, self.nz).normal_(0.0, 1.0)
+        self.x_tilde = self.G(self.z)
+
+        self.fx = self.D(self.x)
+        self.fx_tilde = self.D(self.x_tilde.detach())
+
+        if self.gan_type == 'standard':
+            loss_d = self.criterion(self.fx, self.real_label) + self.criterion(self.fx_tilde, self.fake_label)
+        elif self.gan_type == 'wgan':
+            loss_d = torch.mean(self.fx_tilde) - torch.mean(self.fx)
+            if self.flag_add_drift:
+                loss_d += self.config.lambda_drift * torch.mean(self.fx ** 2)
+        elif self.gan_type == 'wgan-gp':
+            loss_d = torch.mean(self.fx_tilde) - torch.mean(self.fx)
+            gradient_penalty = self.compute_gradient_penalty(self.x.data, self.x_tilde.data)
+            loss_d += self.config.lambda_gp * gradient_penalty
+        elif self.gan_type == 'lsgan':
+            loss_d = 0.5 * torch.mean((self.fx - 1) ** 2) + 0.5 * torch.mean(self.fx_tilde ** 2)
+        elif self.gan_type == 'began':
+            loss_d = torch.mean(torch.abs(self.x - self.D(self.x))) - self.k * torch.mean(torch.abs(self.x_tilde - self.D(self.x_tilde)))
+            self.k = self.k + self.config.lambda_k * (self.config.gamma * loss_d.item() - loss_d.item())
+            self.k = max(min(1, self.k), 0)
+        elif self.gan_type in ['cgan', 'acgan']:
+            real_labels = torch.LongTensor(self.loader.batchsize).random_(0, self.config.n_classes).to(self.device)
+            fake_labels = torch.LongTensor(self.loader.batchsize).random_(0, self.config.n_classes).to(self.device)
+            self.fx, real_aux = self.D(self.x, real_labels)
+            self.fx_tilde, fake_aux = self.D(self.x_tilde.detach(), fake_labels)
+            loss_d = self.criterion(self.fx, self.real_label) + self.criterion(self.fx_tilde, self.fake_label)
+            if self.gan_type == 'acgan':
+                loss_d += F.cross_entropy(real_aux, real_labels) + F.cross_entropy(fake_aux, fake_labels)
+        elif self.gan_type == 'infogan':
+            self.fx, _ = self.D(self.x)
+            self.fx_tilde, _ = self.D(self.x_tilde.detach())
+            loss_d = self.criterion(self.fx, self.real_label) + self.criterion(self.fx_tilde, self.fake_label)
+
+        loss_d.backward()
+        self.opt_d.step()
+
+        if self.gan_type == 'wgan':
+            for p in self.D.parameters():
+                p.data.clamp_(-0.01, 0.01)
+
+        # Update generator
+        self.G.zero_grad()
+        self.fx_tilde = self.D(self.x_tilde)
+
+        if self.gan_type == 'standard':
+            loss_g = self.criterion(self.fx_tilde, self.real_label.detach())
+        elif self.gan_type in ['wgan', 'wgan-gp']:
+            loss_g = -torch.mean(self.fx_tilde)
+        elif self.gan_type == 'lsgan':
+            loss_g = 0.5 * torch.mean((self.fx_tilde - 1) ** 2)
+        elif self.gan_type == 'began':
+            loss_g = torch.mean(torch.abs(self.x_tilde - self.D(self.x_tilde)))
+        elif self.gan_type in ['cgan', 'acgan']:
+            self.fx_tilde, fake_aux = self.D(self.x_tilde, fake_labels)
+            loss_g = self.criterion(self.fx_tilde, self.real_label.detach())
+            if self.gan_type == 'acgan':
+                loss_g += F.cross_entropy(fake_aux, fake_labels)
+        elif self.gan_type == 'infogan':
+            self.fx_tilde, recon_c = self.D(self.x_tilde)
+            loss_g = self.criterion(self.fx_tilde, self.real_label.detach())
+            loss_info = F.mse_loss(recon_c, self.c)
+            loss_g += self.config.lambda_info * loss_info
+
+        loss_g.backward()
+        self.opt_g.step()
+
+        return loss_d.item(), loss_g.item()
+
     def train(self):
         # noise for test
         self.z_test = torch.FloatTensor(self.loader.batchsize, self.nz).to(self.device)
@@ -268,63 +363,12 @@ class PGGAN:
                 # Resolution scheduler
                 self.resl_scheduler()
 
-                # Zero the gradients
-                self.G.zero_grad()
-                self.D.zero_grad()
-
-                # Update discriminator
-                self.x.data = self.feed_interpolated_input(self.loader.get_batch())
-                if self.flag_add_noise:
-                    self.x = self.add_noise(self.x)
-                self.z.data.resize_(self.loader.batchsize, self.nz).normal_(0.0, 1.0)
-                self.x_tilde = self.G(self.z)
-
-                self.fx = self.D(self.x)
-                self.fx_tilde = self.D(self.x_tilde.detach())
-
-                if self.gan_type == 'standard':
-                    loss_d = self.criterion(self.fx, self.real_label) + self.criterion(self.fx_tilde, self.fake_label)
-                elif self.gan_type == 'wgan' or self.gan_type == 'wgan-gp':
-                    loss_d = torch.mean(self.fx_tilde) - torch.mean(self.fx)
-
-                    if self.gan_type == 'wgan-gp':
-                        # Compute gradient penalty
-                        alpha = torch.rand(self.x.size(0), 1, 1, 1).to(self.device)
-                        x_hat = (alpha * self.x.data + (1 - alpha) * self.x_tilde.data).requires_grad_(True)
-                        fx_hat = self.D(x_hat)
-                        grad = torch.autograd.grad(
-                            outputs=fx_hat, inputs=x_hat,
-                            grad_outputs=torch.ones(fx_hat.size()).to(self.device),
-                            create_graph=True, retain_graph=True, only_inputs=True
-                        )[0]
-                        grad_penalty = ((grad.norm(2, dim=1) - 1) ** 2).mean() * self.gp_lambda
-                        loss_d += grad_penalty
-
-                # Compute gradients and apply update to parameters
-                loss_d.backward()
-                self.opt_d.step()
-
-                # Clip weights for WGAN
-                if self.gan_type == 'wgan':
-                    for p in self.D.parameters():
-                        p.data.clamp_(-0.01, 0.01)
-
-                # Update generator
-                self.G.zero_grad()
-                fx_tilde = self.D(self.x_tilde)
-                
-                if self.gan_type == 'standard':
-                    loss_g = self.criterion(fx_tilde, self.real_label.detach())
-                elif self.gan_type == 'wgan' or self.gan_type == 'wgan-gp':
-                    loss_g = -torch.mean(fx_tilde)
-
-                # Compute gradients and apply update to parameters
-                loss_g.backward()
-                self.opt_g.step()
+                # Train step
+                loss_d, loss_g = self.train_step()
 
                 # Log information
                 log_msg = ' [E:{0}][T:{1}][{2:6}/{3:6}]  errD: {4:.4f} | errG: {5:.4f} | [lr:{11:.5f}][cur:{6:.3f}][resl:{7:4}][{8}][{9:.1f}%][{10:.1f}%]'.format(
-                    self.epoch, self.global_tick, self.stack, len(self.loader.dataset), loss_d.item(), loss_g.item(), self.resl, int(pow(2,floor(self.resl))), self.phase, self.complete['gen'], self.complete['dis'], self.lr)
+                    self.epoch, self.global_tick, self.stack, len(self.loader.dataset), loss_d, loss_g, self.resl, int(pow(2,floor(self.resl))), self.phase, self.complete['gen'], self.complete['dis'], self.lr)
                 tqdm.write(log_msg)
 
                 # Save the model
@@ -341,8 +385,8 @@ class PGGAN:
                 # Tensorboard visualization
                 if self.use_tb:
                     x_test = self.G(self.z_test)
-                    self.tb.add_scalar('data/loss_g', loss_g.item(), self.global_iter)
-                    self.tb.add_scalar('data/loss_d', loss_d.item(), self.global_iter)
+                    self.tb.add_scalar('data/loss_g', loss_g, self.global_iter)
+                    self.tb.add_scalar('data/loss_d', loss_d, self.global_iter)
                     self.tb.add_scalar('tick/lr', self.lr, self.global_iter)
                     self.tb.add_scalar('tick/cur_resl', int(pow(2,floor(self.resl))), self.global_iter)
                     self.tb.add_image_grid('grid/x_test', 4, utils.adjust_dyn_range(x_test.data.float(), [-1, 1], [0, 1]), self.global_iter)

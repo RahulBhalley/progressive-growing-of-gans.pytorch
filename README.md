@@ -28,7 +28,13 @@ The network training parameters can be configured with following flags.
 - `--max_resl` - Maximum resolution (10-->1024, 9-->512, 8-->256)
 - `--trns_tick` - Transition tick
 - `--stab_tick` - Stabilization tick
-- `--gan_type` - GAN training methodology (choices: 'standard', 'wgan', 'wgan-gp')
+- `--gan_type` - GAN training methodology (choices: 'standard', 'wgan', 'wgan-gp', 'lsgan', 'began', 'dragan', 'cgan', 'infogan', 'acgan')
+- `--lambda_gp` - Gradient penalty lambda for WGAN-GP
+- `--lambda_drift` - Drift loss coefficient for WGAN
+- `--gamma` - Equilibrium constant for BEGAN
+- `--lambda_k` - Learning rate for k in BEGAN
+- `--lambda_info` - Information loss weight for InfoGAN
+- `--n_classes` - Number of classes for conditional GANs
 
 #### Network structure
 
@@ -61,11 +67,17 @@ Make sure your machine has CUDA enabled GPU(s) if you want to train on GPUs. Cha
 
 ### GAN Training Methodologies
 
-This implementation supports three GAN training methodologies:
+This implementation supports multiple GAN training methodologies:
 
 1. Standard GAN (default)
 2. Wasserstein GAN (WGAN)
 3. Wasserstein GAN with Gradient Penalty (WGAN-GP)
+4. Least Squares GAN (LSGAN)
+5. Boundary Equilibrium GAN (BEGAN)
+6. DRAGAN
+7. Conditional GAN (CGAN)
+8. InfoGAN
+9. Auxiliary Classifier GAN (ACGAN)
 
 To select a specific training methodology, use the `--gan_type` flag:
 
@@ -73,9 +85,17 @@ To select a specific training methodology, use the `--gan_type` flag:
 python main.py --gan_type standard
 python main.py --gan_type wgan
 python main.py --gan_type wgan-gp
+python main.py --gan_type lsgan
+python main.py --gan_type began
+python main.py --gan_type dragan
+python main.py --gan_type cgan
+python main.py --gan_type infogan
+python main.py --gan_type acgan
 ```
 
 ### Related Links
 
 - [Progressive Growing of GANs for Improved Quality, Stability, and Variation](https://arxiv.org/abs/1710.10196)
 - [Original Implementation in Lasagne/Theano](https://github.com/tkarras/progressive_growing_of_gans)
+- [Wasserstein GAN](https://arxiv.org/abs/1701.07875)
+- [Improved Training of Wasserstein GANs](https://arxiv.org/abs/1704.00028)
